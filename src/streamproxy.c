@@ -3,6 +3,7 @@
 #include <string.h>
 #include <netinet/ip.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <linux/dvb/dmx.h>
 
 #define BSIZE                    1024*16
