@@ -1,0 +1,9 @@
+streamproxy must run on the same machine as enigma2, and uses the DVB API
+to get the actual data.
+
+You should run it from inetd on port 8001, with a line like:
+
+8001            stream  tcp     nowait  root    /usr/bin/stream   stream
+
+in your /etc/inetd.conf.
+
