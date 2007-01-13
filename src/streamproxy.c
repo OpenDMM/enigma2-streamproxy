@@ -2,7 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <netinet/ip.h>
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/dvb/dmx.h>
 
@@ -34,6 +36,9 @@ char *reason = "";
 #define MAX_PIDS 16
 
 int active_pids[MAX_PIDS];
+
+int handle_upstream(void);
+int handle_upstream_line(void);
 
 int main(int argc, char **argv)
 {
@@ -175,6 +180,7 @@ int handle_upstream(void)
 				return 1;
 		}
 	}
+	return 0;
 }
 
 int handle_upstream_line(void)
