@@ -100,12 +100,17 @@ int main(int argc, char **argv)
 		fd_set r;
 		FD_ZERO(&r);
 		FD_SET(upstream, &r);
+		FD_SET(0, &r);
 		if (demux_fd != -1)
 			FD_SET(demux_fd, &r);
 		
 		if (select(5, &r, 0, 0, 0) < 0)
 			break;
 
+		if (FD_ISSET(0, &r)) /* check for client disconnect */
+			if (read(0, request, sizeof(request)) <= 0)
+				break;
+		
 				/* handle enigma responses */
 		if (FD_ISSET(upstream, &r))
 			if (handle_upstream())
