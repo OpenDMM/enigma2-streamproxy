@@ -3,7 +3,7 @@ to get the actual data.
 
 You should run it from inetd on port 8001, with a line like:
 
-8001            stream  tcp     nowait  root    /usr/bin/stream   stream
+8001  stream  tcp     nowait  root    /usr/bin/streamproxy streamproxy
 
 in your /etc/inetd.conf.
 
