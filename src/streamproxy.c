@@ -40,7 +40,7 @@ int active_pids[MAX_PIDS];
 int handle_upstream(void);
 int handle_upstream_line(void);
 
-char authorize[128]; /* the saved Authorize:-client-header which will be forwarded to the server */
+char authorization[128]; /* the saved Authorization:-client-header which will be forwarded to the server */
 char wwwauthenticate[128]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
 
 int main(int argc, char **argv)
@@ -73,8 +73,8 @@ int main(int argc, char **argv)
 		if (!fgets(option, 128, stdin))
 			break;
 
-		if (!strncasecmp(option, "Authorize: ", 11)) /* save authorize header */
-			strcpy(authorize, option);
+		if (!strncasecmp(option, "Authorization: ", 15)) /* save authorization header */
+			strcpy(authorization, option);
 		
 		if (option[1] && option[strlen(option)-2] == '\r')
 			option[strlen(option)-2] = 0;
@@ -98,7 +98,7 @@ int main(int argc, char **argv)
 		goto bad_gateway;
 	}
 
-	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s\r\n", service_ref, authorize);
+	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s\r\n", service_ref, authorization);
 	if (write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request))
 		goto bad_gateway;
 	
