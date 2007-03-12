@@ -22,7 +22,7 @@ char response_line[128];
 int response_p;
 
 int upstream;
-int upstream_state;
+int upstream_state, upstream_response_code;
 		/*
 		 0 - response
 		 1 - options
@@ -40,9 +40,12 @@ int active_pids[MAX_PIDS];
 int handle_upstream(void);
 int handle_upstream_line(void);
 
+char authorize[128]; /* the saved Authorize:-client-header which will be forwarded to the server */
+char wwwauthenticate[128]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
+
 int main(int argc, char **argv)
 {
-	char request[128], upstream_request[128];
+	char request[128], upstream_request[256];
 	char *c, *service_ref;
 	if (!fgets(request, 128, stdin))
 		goto bad_request;
@@ -69,11 +72,15 @@ int main(int argc, char **argv)
 		char option[128];
 		if (!fgets(option, 128, stdin))
 			break;
+
+		if (!strncasecmp(option, "Authorize: ", 11)) /* save authorize header */
+			strcpy(authorize, option);
+		
 		if (option[1] && option[strlen(option)-2] == '\r')
 			option[strlen(option)-2] = 0;
 		else
 			option[strlen(option)-1] = 0;
-			
+
 		if (!*option)
 			break;
 	}
@@ -91,7 +98,7 @@ int main(int argc, char **argv)
 		goto bad_gateway;
 	}
 
-	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n\r\n", service_ref);
+	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s\r\n", service_ref, authorize);
 	if (write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request))
 		goto bad_gateway;
 	
@@ -125,7 +132,7 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	if (upstream_state == 0)
+	if (upstream_state != 2)
 		goto bad_gateway;
 	
 	return 0;
@@ -133,7 +140,9 @@ bad_request:
 	printf("HTTP/1.0 400 Bad Request\r\n\r\n");
 	return 1;
 bad_gateway:
-	printf("HTTP/1.0 502 Bad Gateway\r\n\r\n%s\r\n", reason);
+	printf("HTTP/1.0 %s\r\n%s\r\n%s\r\n", 
+		upstream_response_code == 401 ? "401 Unauthorized" : "502 Bad Gateway",
+		wwwauthenticate, reason);
 	return 1;
 }
 
@@ -193,25 +202,27 @@ int handle_upstream_line(void)
 	switch (upstream_state)
 	{
 	case 0:
-		if (strncmp(response_line, "HTTP/1.", 7))
+		if (strncmp(response_line, "HTTP/1.", 7) || strlen(response_line) < 9)
 		{
 			reason = "Invalid upstream response.";
 			return 1;
 		}
-		if (strncmp(response_line + 9, "200", 3))
-		{
-			reason = "Upstream streaming extensions not found.";
-			return 1;
-		}
+		upstream_response_code = atoi(response_line + 9);
+		reason = strdup(response_line + 9);
 		upstream_state++;
 		break;
 	case 1:
 		if (!*response_line)
 		{
-			char *c = "HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: stream_enigma2\r\n\r\n";
-			write(1, c, strlen(c));
-			upstream_state = 2;
-		}
+			if (upstream_response_code == 200)
+			{
+				char *c = "HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: stream_enigma2\r\n\r\n";
+				write(1, c, strlen(c));
+				upstream_state = 2;
+			} else
+				return 1;
+		} else if (!strncasecmp(response_line, "WWW-Authenticate: ", 18))
+			snprintf(wwwauthenticate, 128, "%s\r\n", response_line);
 		break;
 	case 2:
 		if (response_line[0] == '+')
