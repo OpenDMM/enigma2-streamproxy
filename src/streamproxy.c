@@ -18,7 +18,7 @@ typedef enum {
 } dmx_tap_type_t;
 
 
-char response_line[128];
+char response_line[MAX_LINE_LENGTH];
 int response_p;
 
 int upstream;
@@ -33,21 +33,22 @@ int demux_fd = -1;
 
 char *reason = "";
 
-#define MAX_PIDS 16
+#define MAX_PIDS 32
+#define MAX_LINE_LENGTH 512
 
 int active_pids[MAX_PIDS];
 
 int handle_upstream(void);
 int handle_upstream_line(void);
 
-char authorization[128]; /* the saved Authorization:-client-header which will be forwarded to the server */
-char wwwauthenticate[128]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
+char authorization[MAX_LINE_LENGTH]; /* the saved Authorization:-client-header which will be forwarded to the server */
+char wwwauthenticate[MAX_LINE_LENGTH]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
 
 int main(int argc, char **argv)
 {
-	char request[128], upstream_request[256];
+	char request[MAX_LINE_LENGTH], upstream_request[256];
 	char *c, *service_ref;
-	if (!fgets(request, 128, stdin))
+	if (!fgets(request, MAX_LINE_LENGTH - 1, stdin))
 		goto bad_request;
 
 	if (strncmp(request, "GET /", 5))
@@ -69,8 +70,8 @@ int main(int argc, char **argv)
 	
 	while (1)
 	{
-		char option[128];
-		if (!fgets(option, 128, stdin))
+		char option[MAX_LINE_LENGTH];
+		if (!fgets(option, MAX_LINE_LENGTH - 1, stdin))
 			break;
 
 		if (!strncasecmp(option, "Authorization: ", 15)) /* save authorization header */
@@ -148,8 +149,8 @@ bad_gateway:
 
 int handle_upstream(void)
 {
-	char buffer[128];
-	int n = read(upstream, buffer, 128);
+	char buffer[MAX_LINE_LENGTH];
+	int n = read(upstream, buffer, MAX_LINE_LENGTH);
 	if (n == 0)
 		return 1;
 
@@ -222,7 +223,7 @@ int handle_upstream_line(void)
 			} else
 				return 1;
 		} else if (!strncasecmp(response_line, "WWW-Authenticate: ", 18))
-			snprintf(wwwauthenticate, 128, "%s\r\n", response_line);
+			snprintf(wwwauthenticate, MAX_LINE_LENGTH, "%s\r\n", response_line);
 		break;
 	case 2:
 		if (response_line[0] == '+')
