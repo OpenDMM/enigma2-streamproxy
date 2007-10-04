@@ -8,6 +8,9 @@
 #include <sys/ioctl.h>
 #include <linux/dvb/dmx.h>
 
+#define MAX_PIDS 32
+#define MAX_LINE_LENGTH 512
+
 #define BSIZE                    1024*16
 #define DMX_ADD_PID              _IO('o', 51)
 #define DMX_REMOVE_PID           _IO('o', 52)
@@ -32,9 +35,6 @@ int upstream_state, upstream_response_code;
 int demux_fd = -1;
 
 char *reason = "";
-
-#define MAX_PIDS 32
-#define MAX_LINE_LENGTH 512
 
 int active_pids[MAX_PIDS];
 
