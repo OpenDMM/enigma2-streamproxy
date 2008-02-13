@@ -133,7 +133,7 @@ int main(int argc, char **argv)
 		}
 	}
 	
-	if (upstream_state != 2)
+	if (upstream_state != 3)
 		goto bad_gateway;
 	
 	return 0;
@@ -216,16 +216,14 @@ int handle_upstream_line(void)
 		if (!*response_line)
 		{
 			if (upstream_response_code == 200)
-			{
-				char *c = "HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: stream_enigma2\r\n\r\n";
-				write(1, c, strlen(c));
 				upstream_state = 2;
-			} else
-				return 1;
+			else
+				return 1; /* reason was already set in state 0, but we need all header lines for potential WWW-Authenticate */
 		} else if (!strncasecmp(response_line, "WWW-Authenticate: ", 18))
 			snprintf(wwwauthenticate, MAX_LINE_LENGTH, "%s\r\n", response_line);
 		break;
 	case 2:
+	case 3:
 		if (response_line[0] == '+')
 		{
 					/* parse (and possibly open) demux */
@@ -238,7 +236,10 @@ int handle_upstream_line(void)
 				sprintf(demuxfn, "/dev/dvb/adapter0/demux%d", demux);
 				demux_fd = open(demuxfn, O_RDWR);
 				if (demux_fd < 0)
+				{
+					reason = "DEMUX OPEN FAILED";
 					return 2;
+				}
 
 		    flt.pid = -1;
 		    flt.input = DMX_IN_FRONTEND;
@@ -247,13 +248,19 @@ int handle_upstream_line(void)
 		    flt.flags = 0;
 
 		    if (ioctl(demux_fd, DMX_SET_PES_FILTER, &flt) < 0)
+		    {
+		    	reason = "DEMUX PES FILTER SET FAILED";
 		    	return 2;
+				}
 
 				ioctl(demux_fd, DMX_SET_BUFFER_SIZE, 1024*1024);
 				fcntl(demux_fd, F_SETFL, O_NONBLOCK);
 
 		    if (ioctl(demux_fd, DMX_START, 0) < 0)
+		    {
+		    	reason = "DMX_START FAILED";
 		    	return 2;
+				}
 			}
 
 					/* parse new pids */
@@ -307,8 +314,17 @@ int handle_upstream_line(void)
 				if (j == nr_pids)
 					ioctl(demux_fd, DMX_REMOVE_PID, old_active_pids[i]);
 			}
+			if (upstream_state == 2)
+			{
+				char *c = "HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: stream_enigma2\r\n\r\n";
+				write(1, c, strlen(c));
+				upstream_state = 3; /* HTTP response sent */
+			}
 		} else if (response_line[0] == '-')
+		{
+			reason = strdup(response_line + 1);
 			return 1;
+		}
 				/* ignore everything not starting with + or - */
 		break;
 	}
