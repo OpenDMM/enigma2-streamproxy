@@ -307,7 +307,7 @@ int handle_upstream_line(void)
 				if (j == nr_pids)
 					ioctl(demux_fd, DMX_REMOVE_PID, old_active_pids[i]);
 			}
-		} else if (response_line[1] == '-')
+		} else if (response_line[0] == '-')
 			return 1;
 				/* ignore everything not starting with + or - */
 		break;
