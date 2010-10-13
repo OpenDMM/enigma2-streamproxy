@@ -7,11 +7,14 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <linux/dvb/dmx.h>
+#include <linux/dvb/version.h>
 
 #define MAX_PIDS 32
 #define MAX_LINE_LENGTH 512
 
 #define BSIZE                    1024*16
+
+#if DVB_API_VERSION < 5
 #define DMX_ADD_PID              _IO('o', 51)
 #define DMX_REMOVE_PID           _IO('o', 52)
 
@@ -19,7 +22,7 @@ typedef enum {
 	DMX_TAP_TS = 0,
 	DMX_TAP_PES = DMX_PES_OTHER, /* for backward binary compat. */
 } dmx_tap_type_t;
-
+#endif
 
 char response_line[MAX_LINE_LENGTH];
 int response_p;
@@ -141,7 +144,7 @@ bad_request:
 	printf("HTTP/1.0 400 Bad Request\r\n\r\n");
 	return 1;
 bad_gateway:
-	printf("HTTP/1.0 %s\r\n%s\r\n%s\r\n", 
+	printf("HTTP/1.0 %s\r\n%s\r\n%s\r\n",
 		upstream_response_code == 401 ? "401 Unauthorized" : "502 Bad Gateway",
 		wwwauthenticate, reason);
 	return 1;
@@ -203,8 +206,7 @@ int handle_upstream_line(void)
 	switch (upstream_state)
 	{
 	case 0:
-		if (strncmp(response_line, "HTTP/1.", 7) || strlen(response_line) < 9)
-		{
+		if (strncmp(response_line, "HTTP/1.", 7) || strlen(response_line) < 9) {
 			reason = "Invalid upstream response.";
 			return 1;
 		}
@@ -224,44 +226,10 @@ int handle_upstream_line(void)
 		break;
 	case 2:
 	case 3:
-		if (response_line[0] == '+')
-		{
+		if (response_line[0] == '+') {
 					/* parse (and possibly open) demux */
 			int demux = atoi(response_line + 1);
 			
-			if (demux_fd < 0)
-			{
-			  struct dmx_pes_filter_params flt; 
-				char demuxfn[32];
-				sprintf(demuxfn, "/dev/dvb/adapter0/demux%d", demux);
-				demux_fd = open(demuxfn, O_RDWR);
-				if (demux_fd < 0)
-				{
-					reason = "DEMUX OPEN FAILED";
-					return 2;
-				}
-
-		    flt.pid = -1;
-		    flt.input = DMX_IN_FRONTEND;
-		    flt.output = DMX_OUT_TAP;
-		    flt.pes_type = DMX_TAP_TS;
-		    flt.flags = 0;
-
-		    if (ioctl(demux_fd, DMX_SET_PES_FILTER, &flt) < 0)
-		    {
-		    	reason = "DEMUX PES FILTER SET FAILED";
-		    	return 2;
-				}
-
-				ioctl(demux_fd, DMX_SET_BUFFER_SIZE, 1024*1024);
-				fcntl(demux_fd, F_SETFL, O_NONBLOCK);
-
-		    if (ioctl(demux_fd, DMX_START, 0) < 0)
-		    {
-		    	reason = "DMX_START FAILED";
-		    	return 2;
-				}
-			}
 
 					/* parse new pids */
 			const char *p = strchr(response_line, ':');
@@ -299,8 +267,49 @@ int handle_upstream_line(void)
 				for (j = 0; j < MAX_PIDS; ++j)
 					if (active_pids[i] == old_active_pids[j])
 						break;
-				if (j == MAX_PIDS)
-					ioctl(demux_fd, DMX_ADD_PID, active_pids[i]);
+				if (j == MAX_PIDS) {
+					if (demux_fd < 0) {
+						struct dmx_pes_filter_params flt; 
+						char demuxfn[32];
+						sprintf(demuxfn, "/dev/dvb/adapter0/demux%d", demux);
+						demux_fd = open(demuxfn, O_RDWR | O_NONBLOCK);
+						if (demux_fd < 0) {
+							reason = "DEMUX OPEN FAILED";
+							return 2;
+						}
+
+						ioctl(demux_fd, DMX_SET_BUFFER_SIZE, 1024*1024);
+
+						flt.pid = active_pids[i];
+						flt.input = DMX_IN_FRONTEND;
+#if DVB_API_VERSION > 3
+						flt.output = DMX_OUT_TSDEMUX_TAP;
+						flt.pes_type = DMX_PES_OTHER;
+#else
+						flt.output = DMX_OUT_TAP;
+						flt.pes_type = DMX_TAP_TS;
+#endif
+						flt.flags = DMX_IMMEDIATE_START;
+
+						if (ioctl(demux_fd, DMX_SET_PES_FILTER, &flt) < 0) {
+							reason = "DEMUX PES FILTER SET FAILED";
+							return 2;
+						}
+					}
+					else {
+						uint16_t pid = active_pids[i];
+						int ret;
+#if DVB_API_VERSION > 3
+						ret = ioctl(demux_fd, DMX_ADD_PID, &pid);
+#else
+						ret = ioctl(demux_fd, DMX_ADD_PID, pid);
+#endif
+						if (ret < 0) {
+							reason = "DMX_ADD_PID FAILED";
+							return 2;
+						}
+					}
+				}
 			}
 			
 					/* check for removed pids */
@@ -311,17 +320,22 @@ int handle_upstream_line(void)
 				for (j = 0; j < nr_pids; ++j)
 					if (old_active_pids[i] == active_pids[j])
 						break;
-				if (j == nr_pids)
+				if (j == nr_pids) {
+#if DVB_API_VERSION > 3
+					uint16_t pid = old_active_pids[i];
+					ioctl(demux_fd, DMX_REMOVE_PID, &pid);
+#else
 					ioctl(demux_fd, DMX_REMOVE_PID, old_active_pids[i]);
+#endif
+				}
 			}
-			if (upstream_state == 2)
-			{
+			if (upstream_state == 2) {
 				char *c = "HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: stream_enigma2\r\n\r\n";
 				write(1, c, strlen(c));
 				upstream_state = 3; /* HTTP response sent */
 			}
-		} else if (response_line[0] == '-')
-		{
+		}
+		else if (response_line[0] == '-') {
 			reason = strdup(response_line + 1);
 			return 1;
 		}
