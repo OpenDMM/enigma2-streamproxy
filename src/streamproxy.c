@@ -50,7 +50,17 @@ char wwwauthenticate[MAX_LINE_LENGTH]; /* the saved WWW-Authenticate:-server-hea
 int main(int argc, char **argv)
 {
 	char request[MAX_LINE_LENGTH], upstream_request[256];
+	char xff_header[MAX_LINE_LENGTH]; /* X-Forwarded-For header */
 	char *c, *service_ref;
+
+	struct sockaddr_in s_client;
+	int ret_val, len = sizeof(s_client);
+	s_client.sin_family = AF_INET;
+	ret_val = getpeername(STDIN_FILENO, (struct sockaddr *)&s_client, &len);
+	if (!ret_val) {
+		snprintf(xff_header, sizeof(xff_header), "X-Forwarded-For: %s\r\n", (char *)inet_ntoa(s_client.sin_addr));
+	}
+	
 	if (!fgets(request, MAX_LINE_LENGTH - 1, stdin))
 		goto bad_request;
 
@@ -102,7 +112,8 @@ int main(int argc, char **argv)
 		goto bad_gateway;
 	}
 
-	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s\r\n", service_ref, authorization);
+	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s%s\r\n", service_ref, xff_header, authorization);
+
 	if (write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request))
 		goto bad_gateway;
 	
