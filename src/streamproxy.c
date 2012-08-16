@@ -3,6 +3,7 @@
 #include <string.h>
 #include <netinet/ip.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
@@ -12,7 +13,7 @@
 #define MAX_PIDS 32
 #define MAX_LINE_LENGTH 512
 
-#define BSIZE                    1024*16
+#define BSIZE                    32712
 
 #if DVB_API_VERSION < 5
 #define DMX_ADD_PID              _IO('o', 51)
@@ -141,8 +142,11 @@ int main(int argc, char **argv)
 		{
 			static unsigned char buffer[BSIZE];
 			int r = read(demux_fd, buffer, BSIZE);
-			if (r < 0)
+			if (r < 0) {
+				if (errno == EINTR || errno == EAGAIN || errno == EBUSY || errno == EOVERFLOW)
+					continue;
 				break;
+			}
 			write(1, buffer, r);
 		}
 	}
