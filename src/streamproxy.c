@@ -48,6 +48,26 @@ int handle_upstream_line(void);
 char authorization[MAX_LINE_LENGTH]; /* the saved Authorization:-client-header which will be forwarded to the server */
 char wwwauthenticate[MAX_LINE_LENGTH]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
 
+static ssize_t safe_write(int fd, const void *buf, size_t count)
+{
+	const unsigned char *src = buf;
+	size_t todo = count;
+	ssize_t ret;
+
+	do {
+		ret = write(fd, src, todo);
+		if (ret < 0) {
+			if ((errno != EINTR) && (errno != EAGAIN))
+				return ret;
+		} else {
+			src += ret;
+			todo -= ret;
+		}
+	} while (todo > 0);
+
+	return count;
+}
+
 int main(int argc, char **argv)
 {
 	char request[MAX_LINE_LENGTH], upstream_request[256];
@@ -116,7 +136,7 @@ int main(int argc, char **argv)
 
 	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s%s\r\n", service_ref, xff_header, authorization);
 
-	if (write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request))
+	if (safe_write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request))
 		goto bad_gateway;
 	
 	while (1)
@@ -148,7 +168,7 @@ int main(int argc, char **argv)
 					continue;
 				break;
 			}
-			write(1, buffer, r);
+			safe_write(1, buffer, r);
 		}
 	}
 	
@@ -347,7 +367,7 @@ int handle_upstream_line(void)
 			}
 			if (upstream_state == 2) {
 				char *c = "HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: video/mpeg\r\nServer: stream_enigma2\r\n\r\n";
-				write(1, c, strlen(c));
+				safe_write(1, c, strlen(c));
 				upstream_state = 3; /* HTTP response sent */
 			}
 		}
