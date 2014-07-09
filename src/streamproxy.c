@@ -123,6 +123,10 @@ int main(int argc, char **argv)
 	
 		/* connect to enigma2 */
 	upstream = socket(PF_INET, SOCK_STREAM, 0);
+	if (upstream < 0) {
+		reason = "Failed to create socket.";
+		goto bad_gateway;
+	}
 	
   struct sockaddr_in sin;
 	sin.sin_family = AF_INET;
