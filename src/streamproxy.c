@@ -69,24 +69,53 @@ static ssize_t safe_write(int fd, const void *buf, size_t count)
 	return count;
 }
 
+static void set_x_forwarded_for(int socket, char *xff_header, size_t size)
+{
+	char dst[INET6_ADDRSTRLEN];
+	struct sockaddr_storage addr;
+	socklen_t addrlen;
+	const void *src;
+
+	*xff_header = '\0';
+
+	memset(&addr, 0, sizeof(struct sockaddr_storage));
+	addrlen = sizeof(struct sockaddr_storage);
+
+	if (getpeername(STDIN_FILENO, (struct sockaddr *)&addr, &addrlen) < 0)
+		return;
+
+	switch (addr.ss_family) {
+	case AF_INET:
+		src = &((const struct sockaddr_in *)&addr)->sin_addr;
+		break;
+	case AF_INET6:
+		src = &((const struct sockaddr_in6 *)&addr)->sin6_addr;
+		break;
+	default:
+		syslog(LOG_ERR, "Unknown protocol (%u)", addr.ss_family);
+		return;
+	}
+
+	*dst = '\0';
+	if (inet_ntop(addr.ss_family, src, dst, sizeof(dst)) == NULL)
+		return;
+
+	if (*dst) {
+		snprintf(xff_header, size, "X-Forwarded-For: %s\r\n", dst);
+		syslog(LOG_DEBUG, "X-Forwarded-For: %s", dst);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	char request[MAX_LINE_LENGTH], upstream_request[256];
 	char xff_header[MAX_LINE_LENGTH]; /* X-Forwarded-For header */
 	char *c, *service_ref;
 
-	struct sockaddr_in s_client;
-	int ret_val;
-	socklen_t len = sizeof(s_client);
-
 	openlog("streamproxy", LOG_PID, LOG_DAEMON);
 
-	s_client.sin_family = AF_INET;
-	ret_val = getpeername(STDIN_FILENO, (struct sockaddr *)&s_client, &len);
-	if (!ret_val) {
-		snprintf(xff_header, sizeof(xff_header), "X-Forwarded-For: %s\r\n", (char *)inet_ntoa(s_client.sin_addr));
-	}
-	
+	set_x_forwarded_for(STDIN_FILENO, xff_header, sizeof(xff_header));
+
 	if (!fgets(request, MAX_LINE_LENGTH - 1, stdin))
 		goto bad_request;
 
