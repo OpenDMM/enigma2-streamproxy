@@ -128,7 +128,7 @@ int main(int argc, char **argv)
 		goto bad_gateway;
 	}
 	
-  struct sockaddr_in sin;
+	struct sockaddr_in sin;
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(80);
 	sin.sin_addr.s_addr = inet_addr("127.0.0.1");
