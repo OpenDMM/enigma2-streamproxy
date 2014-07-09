@@ -25,28 +25,28 @@ typedef enum {
 } dmx_tap_type_t;
 #endif
 
-char response_line[MAX_LINE_LENGTH];
-int response_p;
+static char response_line[MAX_LINE_LENGTH];
+static int response_p;
 
-int upstream;
-int upstream_state, upstream_response_code;
+static int upstream;
+static int upstream_state, upstream_response_code;
 		/*
 		 0 - response
 		 1 - options
 		 2 - body
 		 */
 
-int demux_fd = -1;
+static int demux_fd = -1;
 
-char *reason = "";
+static char *reason = "";
 
-int active_pids[MAX_PIDS];
+static int active_pids[MAX_PIDS];
 
-int handle_upstream(void);
-int handle_upstream_line(void);
+static int handle_upstream(void);
+static int handle_upstream_line(void);
 
-char authorization[MAX_LINE_LENGTH]; /* the saved Authorization:-client-header which will be forwarded to the server */
-char wwwauthenticate[MAX_LINE_LENGTH]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
+static char authorization[MAX_LINE_LENGTH]; /* the saved Authorization:-client-header which will be forwarded to the server */
+static char wwwauthenticate[MAX_LINE_LENGTH]; /* the saved WWW-Authenticate:-server-header, which will be forwarded to user client */
 
 static ssize_t safe_write(int fd, const void *buf, size_t count)
 {
@@ -186,7 +186,7 @@ bad_gateway:
 	return 1;
 }
 
-int handle_upstream(void)
+static int handle_upstream(void)
 {
 	char buffer[MAX_LINE_LENGTH];
 	int n = read(upstream, buffer, MAX_LINE_LENGTH);
@@ -237,7 +237,7 @@ int handle_upstream(void)
 	return 0;
 }
 
-int handle_upstream_line(void)
+static int handle_upstream_line(void)
 {
 	switch (upstream_state)
 	{
