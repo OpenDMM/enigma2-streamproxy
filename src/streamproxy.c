@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <syslog.h>
 #include <linux/dvb/dmx.h>
 #include <linux/dvb/version.h>
 
@@ -77,6 +78,9 @@ int main(int argc, char **argv)
 	struct sockaddr_in s_client;
 	int ret_val;
 	socklen_t len = sizeof(s_client);
+
+	openlog("streamproxy", LOG_PID, LOG_DAEMON);
+
 	s_client.sin_family = AF_INET;
 	ret_val = getpeername(STDIN_FILENO, (struct sockaddr *)&s_client, &len);
 	if (!ret_val) {
@@ -180,15 +184,19 @@ int main(int argc, char **argv)
 	
 	if (upstream_state != 3)
 		goto bad_gateway;
-	
+
+	closelog();
 	return 0;
 bad_request:
+	syslog(LOG_ERR, "Bad Request: %s", request);
 	printf("HTTP/1.0 400 Bad Request\r\n\r\n");
 	return 1;
 bad_gateway:
+	syslog(LOG_ERR, "Bad Gateway: %s", reason);
 	printf("HTTP/1.0 %s\r\n%s\r\n%s\r\n",
 		upstream_response_code == 401 ? "401 Unauthorized" : "502 Bad Gateway",
 		wwwauthenticate, reason);
+	closelog();
 	return 1;
 }
 
