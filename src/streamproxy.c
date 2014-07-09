@@ -55,7 +55,8 @@ int main(int argc, char **argv)
 	char *c, *service_ref;
 
 	struct sockaddr_in s_client;
-	int ret_val, len = sizeof(s_client);
+	int ret_val;
+	socklen_t len = sizeof(s_client);
 	s_client.sin_family = AF_INET;
 	ret_val = getpeername(STDIN_FILENO, (struct sockaddr *)&s_client, &len);
 	if (!ret_val) {
