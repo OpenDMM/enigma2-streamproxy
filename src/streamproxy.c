@@ -140,8 +140,10 @@ int main(int argc, char **argv)
 
 	snprintf(upstream_request, sizeof(upstream_request), "GET /web/stream?StreamService=%s HTTP/1.0\r\n%s%s\r\n", service_ref, xff_header, authorization);
 
-	if (safe_write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request))
+	if (safe_write(upstream, upstream_request, strlen(upstream_request)) != strlen(upstream_request)) {
+		reason = "Failed to issue upstream request.";
 		goto bad_gateway;
+	}
 	
 	while (1)
 	{
