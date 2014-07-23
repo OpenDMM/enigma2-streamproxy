@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/param.h>
 #include <syslog.h>
 #include <linux/dvb/dmx.h>
 #include <linux/dvb/version.h>
@@ -187,7 +188,7 @@ int main(int argc, char **argv)
 		if (demux_fd != -1)
 			FD_SET(demux_fd, &r);
 		
-		if (select(5, &r, 0, 0, 0) < 0)
+		if (select(MAX(upstream, demux_fd) + 1, &r, 0, 0, 0) < 0)
 			break;
 
 		if (FD_ISSET(0, &r)) /* check for client disconnect */
